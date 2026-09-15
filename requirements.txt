@@ -1,10 +1,14 @@
 streamlit
-langchain
+python-dotenv
+
+langchain-core
 langchain-community
 langchain-google-genai
 langchain-huggingface
+
 sentence-transformers
 faiss-cpu
+
 google-generativeai
-torch
 transformers
+torch
