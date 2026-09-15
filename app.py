@@ -1,7 +1,6 @@
 import os
 import streamlit as st
 
-from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 
@@ -140,6 +139,7 @@ st.markdown(
 st.markdown(
     """
     <div class="hero">
+
         <div class="eyebrow">
             Medical knowledge assistant
         </div>
@@ -150,6 +150,7 @@ st.markdown(
             Ask clear, evidence-grounded questions
             from your medical reference library.
         </p>
+
     </div>
     """,
     unsafe_allow_html=True,
@@ -180,51 +181,40 @@ def get_vectorstore():
 
 
 # ============================================================
-# PROMPT TEMPLATE
-# ============================================================
-
-def set_custom_prompt(custom_prompt_template):
-
-    return PromptTemplate(
-        template=custom_prompt_template,
-        input_variables=["context", "question"],
-    )
-
-
-# ============================================================
 # GET GEMINI API KEY
 # ============================================================
 
 def get_gemini_api_key():
 
     # --------------------------------------------------------
-    # 1. Streamlit Cloud Secrets
+    # STREAMLIT CLOUD SECRETS
     # --------------------------------------------------------
 
     try:
+
         if "GEMINI_API_KEY" in st.secrets:
+
             api_key = st.secrets["GEMINI_API_KEY"]
 
             if api_key:
+
                 return api_key
 
     except Exception:
+
         pass
 
 
     # --------------------------------------------------------
-    # 2. Environment variable fallback
+    # LOCAL ENVIRONMENT VARIABLE
     # --------------------------------------------------------
 
     api_key = os.getenv("GEMINI_API_KEY")
 
     if api_key:
+
         return api_key
 
-
-    # --------------------------------------------------------
-    # 3. No key found
-    # --------------------------------------------------------
 
     return None
 
@@ -240,8 +230,8 @@ def load_llm():
     if not api_key:
 
         raise ValueError(
-            "Gemini API key is missing. "
-            "Add GEMINI_API_KEY to Streamlit Secrets."
+            "GEMINI_API_KEY is missing. "
+            "Please add it in Streamlit Cloud Secrets."
         )
 
     return ChatGoogleGenerativeAI(
@@ -258,12 +248,11 @@ def load_llm():
 def extract_response_text(response):
 
     """
-    Safely convert a LangChain Gemini response
-    into normal text.
+    Safely extracts plain text from the Gemini response.
     """
 
     # --------------------------------------------------------
-    # Try response.text first
+    # Try response.text
     # --------------------------------------------------------
 
     try:
@@ -275,6 +264,7 @@ def extract_response_text(response):
             return text.strip()
 
     except Exception:
+
         pass
 
 
@@ -282,7 +272,11 @@ def extract_response_text(response):
     # Try response.content
     # --------------------------------------------------------
 
-    content = getattr(response, "content", None)
+    content = getattr(
+        response,
+        "content",
+        None
+    )
 
 
     if content is None:
@@ -296,7 +290,7 @@ def extract_response_text(response):
 
 
     # --------------------------------------------------------
-    # Content returned as a list
+    # Handle list response
     # --------------------------------------------------------
 
     if isinstance(content, list):
@@ -313,22 +307,29 @@ def extract_response_text(response):
 
                 if block.get("type") == "text":
 
-                    text = block.get("text", "")
+                    text = block.get(
+                        "text",
+                        ""
+                    )
 
                     if text:
 
-                        text_parts.append(str(text))
+                        text_parts.append(
+                            str(text)
+                        )
 
         if text_parts:
 
-            return "\n".join(text_parts).strip()
+            return "\n".join(
+                text_parts
+            ).strip()
 
 
     return str(content)
 
 
 # ============================================================
-# RAG PROMPT
+# MEDICAL RAG PROMPT
 # ============================================================
 
 CUSTOM_PROMPT_TEMPLATE = """
@@ -339,10 +340,17 @@ provided in the medical reference context.
 
 IMPORTANT RULES:
 
-1. Use only the provided context.
-2. Do not invent medical information.
-3. Do not make up facts, medicines, dosages, diagnoses,
-   or treatment recommendations.
+1. Use ONLY the provided context.
+
+2. Do NOT invent medical information.
+
+3. Do NOT make up:
+   - diagnoses
+   - medicines
+   - dosages
+   - treatments
+   - medical facts
+
 4. If the answer cannot be found in the context, say:
 
 "I don't know based on the provided medical reference."
@@ -350,18 +358,24 @@ IMPORTANT RULES:
 5. If the user describes personal symptoms, explain only
    what the reference says and clearly recommend consulting
    a qualified healthcare professional for diagnosis.
-6. Keep the answer clear and easy to understand.
-7. Use headings and bullet points when useful.
-8. Do not mention the context or retrieval process unless
-   necessary.
 
-Context:
+6. Keep the answer clear and easy to understand.
+
+7. Use headings and bullet points when useful.
+
+8. Do not mention the retrieval process.
+
+9. Answer the question directly.
+
+Medical reference context:
+
 {context}
 
-Question:
+User question:
+
 {question}
 
-Answer directly:
+Answer:
 """
 
 
@@ -375,14 +389,18 @@ if "messages" not in st.session_state:
 
 
 # ============================================================
-# DISPLAY CHAT HISTORY
+# DISPLAY PREVIOUS MESSAGES
 # ============================================================
 
 for message in st.session_state.messages:
 
-    with st.chat_message(message["role"]):
+    with st.chat_message(
+        message["role"]
+    ):
 
-        st.markdown(message["content"])
+        st.markdown(
+            message["content"]
+        )
 
 
 # ============================================================
@@ -395,13 +413,13 @@ prompt = st.chat_input(
 
 
 # ============================================================
-# PROCESS QUESTION
+# PROCESS USER QUESTION
 # ============================================================
 
 if prompt:
 
     # --------------------------------------------------------
-    # Display user question
+    # Display user message
     # --------------------------------------------------------
 
     with st.chat_message("user"):
@@ -410,7 +428,7 @@ if prompt:
 
 
     # --------------------------------------------------------
-    # Save user question
+    # Save user message
     # --------------------------------------------------------
 
     st.session_state.messages.append(
@@ -421,9 +439,9 @@ if prompt:
     )
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # RUN RAG
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
 
@@ -431,20 +449,22 @@ if prompt:
             "Reviewing the medical reference..."
         ):
 
-            # =================================================
+            # ------------------------------------------------
             # 1. Load FAISS
-            # =================================================
+            # ------------------------------------------------
 
             vectorstore = get_vectorstore()
 
 
-            # =================================================
-            # 2. Search relevant documents
-            # =================================================
+            # ------------------------------------------------
+            # 2. Retrieve relevant documents
+            # ------------------------------------------------
 
-            source_documents = vectorstore.similarity_search(
-                prompt,
-                k=TOP_K,
+            source_documents = (
+                vectorstore.similarity_search(
+                    prompt,
+                    k=TOP_K,
+                )
             )
 
 
@@ -456,9 +476,9 @@ if prompt:
                 )
 
 
-            # =================================================
+            # ------------------------------------------------
             # 3. Build context
-            # =================================================
+            # ------------------------------------------------
 
             context_parts = []
 
@@ -473,12 +493,14 @@ if prompt:
                 )
 
 
-            context = "\n\n".join(context_parts)
+            context = "\n\n".join(
+                context_parts
+            )
 
 
-            # =================================================
-            # 4. Limit context size
-            # =================================================
+            # ------------------------------------------------
+            # 4. Limit context
+            # ------------------------------------------------
 
             MAX_CONTEXT_CHARS = 18000
 
@@ -489,40 +511,37 @@ if prompt:
                 ]
 
 
-            # =================================================
-            # 5. Create prompt
-            # =================================================
+            # ------------------------------------------------
+            # 5. Create final prompt
+            # ------------------------------------------------
 
-            prompt_template = set_custom_prompt(
-                CUSTOM_PROMPT_TEMPLATE
+            formatted_prompt = (
+                CUSTOM_PROMPT_TEMPLATE.format(
+                    context=context,
+                    question=prompt,
+                )
             )
 
 
-            formatted_prompt = prompt_template.format(
-                context=context,
-                question=prompt,
-            )
-
-
-            # =================================================
+            # ------------------------------------------------
             # 6. Load Gemini
-            # =================================================
+            # ------------------------------------------------
 
             llm = load_llm()
 
 
-            # =================================================
+            # ------------------------------------------------
             # 7. Generate response
-            # =================================================
+            # ------------------------------------------------
 
             llm_response = llm.invoke(
                 formatted_prompt
             )
 
 
-            # =================================================
-            # 8. Extract clean response
-            # =================================================
+            # ------------------------------------------------
+            # 8. Extract text
+            # ------------------------------------------------
 
             result = extract_response_text(
                 llm_response
@@ -537,18 +556,18 @@ if prompt:
                 )
 
 
-        # ----------------------------------------------------
-        # Display assistant response
-        # ----------------------------------------------------
+        # ====================================================
+        # DISPLAY ASSISTANT RESPONSE
+        # ====================================================
 
         with st.chat_message("assistant"):
 
             st.markdown(result)
 
 
-        # ----------------------------------------------------
-        # Save assistant response
-        # ----------------------------------------------------
+        # ====================================================
+        # SAVE ASSISTANT RESPONSE
+        # ====================================================
 
         st.session_state.messages.append(
             {
@@ -559,7 +578,7 @@ if prompt:
 
 
         # ====================================================
-        # SOURCES
+        # DISPLAY SOURCES
         # ====================================================
 
         with st.expander(
@@ -588,7 +607,9 @@ if prompt:
 
                     try:
 
-                        page_number = int(page) + 1
+                        page_number = (
+                            int(page) + 1
+                        )
 
                     except (
                         ValueError,
